@@ -1,43 +1,51 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use rand::RngCore;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-trait UUIDTimestamp {
-    fn to_uuidv7_format(&self) -> [u8; 8];
-}
+pub struct UUID([u8; 16]);
 
-impl UUIDTimestamp for SystemTime {
-    fn to_uuidv7_format(&self) -> [u8; 8] {
-        let ts = self
+impl UUID {
+    fn generate_random_bytes() -> [u8; 10] {
+        let mut buf = [0u8; 10];
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(&mut buf);
+        return buf;
+    }
+
+    pub fn format_to_string(&self) -> String {
+        return self
+            .0
+            .into_iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect();
+    }
+
+    pub fn generate_v7() -> Self {
+        let mut buf = [0u8; 16];
+
+        // Generate current unix millisecond timestamp
+        let ts = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("This function is only defined for timestamps before unix epoch")
-            .as_secs() as u64;
+            .unwrap()
+            .as_millis() as u64;
+        let tsbuf: [u8; 8] = (ts << 16).to_be_bytes();
 
-        let buffer: [u8; 8] = (ts << 16).to_be_bytes();
-        return buffer;
-    }
-}
+        // Set the first 6 bytes to a 48-bit big-endian timestamp
+        buf[0..8].copy_from_slice(&tsbuf);
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+        // Copy 10 bytes of random data into the buffer
+        let rand_data = Self::generate_random_bytes();
+        buf[6..].copy_from_slice(&rand_data);
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        // Clear the first 4 bits of 7th byte
+        buf[6] &= 0xF;
+        // Set the first 4 bits to UUID version marker
+        buf[6] |= 7 << 4;
 
-    #[test]
-    fn test_converting_timestamps() {
-        let ts = UNIX_EPOCH;
-        let actual = ts.to_uuidv7_format();
-        assert_eq!(actual, [0, 0, 0, 0, 0, 0, 0, 0]);
+        // Zero the first 2 bits of 9th byte
+        buf[8] &= 0x3F;
+        // Set the first 2 bits to RFC variant 2
+        buf[8] |= 2 << 6;
 
-        let ts = UNIX_EPOCH + Duration::from_millis(1688812097280);
-        let actual = ts.to_uuidv7_format();
-        assert_eq!(actual, [1, 137, 53, 11, 143, 0, 0, 0]);
-    }
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        Self(buf)
     }
 }
