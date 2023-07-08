@@ -49,3 +49,21 @@ impl UUID {
         Self(buf)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_v7() {
+        let result = UUID::generate_v7();
+        let byte = result.0[6];
+        assert_eq!(byte & 0xF0, 7 << 4);
+    }
+
+    #[test]
+    fn test_format() {
+        let result = UUID::generate_v7().format_to_string();
+        assert_eq!(result.len(), 32);
+    }
+}
